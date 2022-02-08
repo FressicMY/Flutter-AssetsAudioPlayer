@@ -422,10 +422,13 @@ class AssetsAudioPlayer {
   ValueStream<double> get forwardRewindSpeed => _forwardRewindSpeed.stream;
 
   Duration? _lastSeek;
+  List<int>? get shuffledIndexList => _playlist?.indexList;
 
   /// returns the looping state : true -> looping, false -> not looping
-  LoopMode? get currentLoopMode => _loopMode.value;
+  LoopMode? get currentLoopMode => _loopMode.valueOrNull;
+  Playing? get currentPlaying => current.valueOrNull;
 
+  PlayerState? get currentPlayerState => _playerState.valueOrNull;
   bool get shuffle => _shuffle.valueOrNull ?? false;
 
   bool _stopped = false;
@@ -722,21 +725,23 @@ class AssetsAudioPlayer {
     });
   }
 
-  Future<void> playlistPlayAtIndex(int index) async {
+  Future<void> playlistPlayAtIndex(int index, {bool autoStart = true}) async {
     if (_playlist != null) {
       _playlist!.moveTo(index);
-      await _openPlaylistCurrent();
+      await _openPlaylistCurrent(autoStart: autoStart);
     }
   }
 
   /// keepLoopMode:
   /// if true : the loopMode is .single => execute previous() will keep it .single
   /// if false : the loopMode is .single => execute previous() will set it as .playlist
-  Future<bool> previous({bool keepLoopMode = true}) async {
+  Future<bool> previous(
+      {bool keepLoopMode = true, bool forcePre = false}) async {
     if (_playlist != null) {
       // more than 5 sec played, go back to the start of audio
       if (_currentPosition.valueOrNull != null &&
-          _currentPosition.valueOrNull!.inSeconds >= 5) {
+          _currentPosition.valueOrNull!.inSeconds >= 5 &&
+          !forcePre) {
         await seek(Duration.zero, force: true);
       } else if (_playlist!.hasPrev()) {
         if (!keepLoopMode) {
@@ -1040,10 +1045,8 @@ class AssetsAudioPlayer {
               audio.playSpeed ??
               this.playSpeed.valueOrNull ??
               defaultPlaySpeed,
-          'pitch': pitch ??
-              audio.pitch ??
-              this.pitch.valueOrNull ??
-              defaultPitch,
+          'pitch':
+              pitch ?? audio.pitch ?? this.pitch.valueOrNull ?? defaultPitch,
         };
         if (seek != null) {
           params['seek'] = seek.inMilliseconds.round();
@@ -1058,14 +1061,13 @@ class AssetsAudioPlayer {
               audio.networkHeaders ?? networkSettings.defaultHeaders;
         }
 
-        if(audio.drmConfiguration != null){
-          var drmMap  ={};
+        if (audio.drmConfiguration != null) {
+          var drmMap = {};
           drmMap['drmType'] = audio.drmConfiguration!.drmType.toString();
-          if(audio.drmConfiguration!.drmType==DrmType.clearKey){
+          if (audio.drmConfiguration!.drmType == DrmType.clearKey) {
             drmMap['clearKey'] = audio.drmConfiguration!.clearKey;
           }
           params['drmConfiguration'] = drmMap;
-
         }
 
         //region notifs
